@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Particle Alchemist V9 - Classic Heart & Axis Fix</title>
+    <title>Particle Alchemist V10 - Morandi UI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <script type="importmap">
         {
             "imports": {
@@ -24,7 +26,8 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #020202; }
         canvas { display: block; }
-        .lil-gui { --background-color: rgba(5, 5, 5, 0.95); --text-color: #eee; --title-background-color: #D32F2F; }
+        /* Hide scrollbar */
+        ::-webkit-scrollbar { display: none; }
         .glass-loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.4); font-family: monospace; pointer-events: none; letter-spacing: 2px;}
     </style>
 </head>
@@ -39,9 +42,8 @@
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-        import GUI from 'lil-gui';
 
-        // --- V9 Config ---
+        // --- Configuration (Logic from V9) ---
         const PARAMS = {
             particleCount: 400000, 
             particleSize: 0.065,  
@@ -49,14 +51,15 @@
             bloomRadius: 0.4,
             bloomThreshold: 0.15,
             autoRotate: true,
-            // Colors
-            heartColor: '#ff0033', // Pure Red
+            // Colors will be controlled by UI now, but these are defaults
+            heartColor: '#ff0033', 
             treeLeaf: '#00ff66',
             treeRibbon: '#ffcc00',
             saturnBody: '#ff9900',
             saturnRing: '#4466ff'
         };
 
+        // --- Math & Geometry (V9 Logic) ---
         const MathUtils = {
             createTexture: () => {
                 const canvas = document.createElement('canvas');
@@ -71,29 +74,31 @@
                 return new THREE.CanvasTexture(canvas);
             },
 
-            getPositions: (type, totalCount) => {
+            getPositions: (type, totalCount, themeColorHex) => {
                 const positions = new Float32Array(totalCount * 3);
                 const colors = new Float32Array(totalCount * 3);
                 const cMain = new THREE.Color();
                 const cSec = new THREE.Color();
                 
+                // If a theme color is provided via UI, we might want to override some defaults
+                // or just use it for specific shapes. 
+                // For this implementation, let's map the Theme Color to the main body of shapes.
+                
                 let ptr = 0;
 
                 if (type === 'HEART') {
-                    // ROLLBACK: Pure Volumetric Heart (No Edges)
-                    cMain.set(PARAMS.heartColor);
+                    // Use UI Theme Color for Heart
+                    cMain.set(themeColorHex || PARAMS.heartColor);
+                    
                     while (ptr < totalCount) {
                         const x = (Math.random() * 2 - 1) * 1.6;
                         const y = (Math.random() * 2 - 1) * 1.6;
                         const z = (Math.random() * 2 - 1) * 1.6;
-                        // Heart Inequality: (x^2 + 9/4y^2 + z^2 - 1)^3 - ... < 0
                         const a = x*x + (9/4)*y*y + z*z - 1;
                         if (a*a*a - x*x*z*z*z - (9/80)*y*y*z*z*z < 0) {
                             positions[ptr*3] = x * 10;
                             positions[ptr*3+1] = y * 10 + 2;
                             positions[ptr*3+2] = z * 10;
-                            
-                            // Simple depth gradient for 3D feel
                             const depth = (z + 1.5) / 3.0;
                             const shadow = 0.5 + depth * 0.5;
                             colors[ptr*3] = cMain.r * shadow;
@@ -104,7 +109,11 @@
                     }
                 } 
                 else if (type === 'SATURN') {
-                    cMain.set(PARAMS.saturnBody); cSec.set(PARAMS.saturnRing);
+                    // Use Theme Color for Saturn Body? Or keep classic? 
+                    // Let's mix Theme Color with Classic Saturn
+                    cMain.set(themeColorHex || PARAMS.saturnBody); 
+                    cSec.set(PARAMS.saturnRing);
+
                     const edgeCount = Math.floor(totalCount * 0.08); const volCount = totalCount - edgeCount;
                     const rings = [9.2, 14.8]; 
                     for (let i = 0; i < edgeCount; i++) {
@@ -128,8 +137,11 @@
                     }
                 }
                 else if (type === 'TREE') {
-                    // Keep V8 Tree (Wider Ribbon)
-                    cMain.set(PARAMS.treeLeaf); cSec.set(PARAMS.treeRibbon);
+                    // Theme color could influence ribbon or leaves. Let's make it influence leaves slightly.
+                    const themeC = new THREE.Color(themeColorHex || PARAMS.treeLeaf);
+                    cMain.set(PARAMS.treeLeaf).lerp(themeC, 0.5); // Blend default green with theme
+                    cSec.set(PARAMS.treeRibbon);
+
                     const h=28; const maxR=11; 
                     const ribCount=Math.floor(totalCount*0.25);
                     const bodyCount=totalCount-ribCount;
@@ -141,11 +153,9 @@
                     }
                     for(let i=0;i<ribCount;i++){
                         const t=i/ribCount; const y=(t*h)-(h/2); const relY=1-t; 
-                        // Wide ribbon spread
                         const widthSpread = (Math.random() - 0.5) * 1.8; 
                         const r = (maxR*relY) + 0.5 + widthSpread;
                         const a = t*6.28*7;
-
                         positions[ptr*3]=Math.cos(a)*r; positions[ptr*3+1]=y; positions[ptr*3+2]=Math.sin(a)*r;
                         colors[ptr*3]=cSec.r*1.3; colors[ptr*3+1]=cSec.g*1.3; colors[ptr*3+2]=cSec.b*1.3; ptr++;
                     }
@@ -154,15 +164,122 @@
             }
         };
 
-        const Scene = ({ shape, handState }) => {
+        // --- NEW UI COMPONENT (Translated from your TSX) ---
+        const UIControls = ({ currentShape, currentColor, onShapeChange, onColorChange, isReady, isHandDetected }) => {
+            const shapes = ['HEART', 'SATURN', 'TREE'];
+            
+            // Morandi & Gentle Palette
+            const colors = [
+                { hex: '#ff0033', name: 'Classic Red' }, // Kept classic red for Heart
+                { hex: '#727D71', name: 'Olive' },
+                { hex: '#9CAF88', name: 'Sage' },
+                { hex: '#B7D99D', name: 'Matcha' }, 
+                { hex: '#E0D6C2', name: 'Sand' },
+                { hex: '#C4A484', name: 'Clay' },
+                { hex: '#D8B0B9', name: 'Dusty Pink' },
+                { hex: '#F7CAC9', name: 'Rose Quartz' }, 
+                { hex: '#B39EB5', name: 'Lavender' }, 
+                { hex: '#7A8FA3', name: 'Slate' },
+                { hex: '#92A8D1', name: 'Serenity' }, 
+                { hex: '#B0C4DE', name: 'Steel' },
+            ];
+
+            return (
+                <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 md:p-10 z-10 font-sans text-white/90">
+                
+                {/* Header */}
+                <div className="flex justify-between items-start pointer-events-auto">
+                    <div>
+                    <h1 className="text-3xl md:text-4xl font-light tracking-[0.1em] text-white drop-shadow-md font-serif">
+                        Arix <span className="font-bold">Particles</span>
+                    </h1>
+                    <div className="h-0.5 w-12 bg-white/40 mt-2 mb-2"></div>
+                    <p className="text-[10px] md:text-xs text-white/60 uppercase tracking-[0.3em] font-light">
+                        Interactive Digital Art
+                    </p >
+                    </div>
+                    
+                    {/* Status Indicators */}
+                    <div className="flex flex-col items-end gap-3">
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-medium tracking-widest backdrop-blur-md border transition-all duration-700 ${isReady ? 'border-white/20 bg-white/10 text-white' : 'border-white/5 bg-white/5 text-white/40'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isReady ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-500'}`}></span>
+                            {isReady ? 'SYSTEM READY' : 'LOADING AI...'}
+                        </div>
+                        
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-medium tracking-widest transition-all duration-500 backdrop-blur-md border ${isHandDetected ? 'border-white/30 bg-white/15 text-white scale-105' : 'border-transparent bg-transparent text-white/30'}`}>
+                            <i className={`fas fa-hand-sparkles ${isHandDetected ? 'text-blue-200' : ''}`}></i>
+                            <span className="ml-2">{isHandDetected ? 'HAND LINKED' : 'NO HAND'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Controls */}
+                <div className="pointer-events-auto w-full max-w-5xl mx-auto mb-2">
+                    <div className="bg-black/20 backdrop-blur-3xl p-5 rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col gap-6 transition-all hover:bg-black/30">
+                    
+                    {/* Shape Selector */}
+                    <div className="flex overflow-x-auto pb-2 justify-center md:justify-start gap-3">
+                        {shapes.map((shape) => (
+                            <button
+                            key={shape}
+                            onClick={() => onShapeChange(shape)}
+                            className={`px-4 py-2 rounded-lg text-[10px] md:text-xs font-medium uppercase tracking-widest whitespace-nowrap transition-all duration-300 border
+                                ${currentShape === shape 
+                                ? 'bg-white/90 text-gray-900 border-white shadow-lg transform -translate-y-0.5' 
+                                : 'bg-transparent text-white/50 border-white/10 hover:border-white/30 hover:text-white'
+                                }`}
+                            >
+                            {shape}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Color Palette */}
+                    <div className="flex flex-wrap gap-3 justify-center md:justify-start items-center">
+                        <span className="text-[10px] uppercase tracking-widest text-white/40 mr-2 hidden md:inline-block">Theme:</span>
+                        {colors.map((c) => (
+                            <button
+                                key={c.hex}
+                                onClick={() => onColorChange(c.hex)}
+                                title={c.name}
+                                className={`group relative w-6 h-6 md:w-8 md:h-8 rounded-full transition-all duration-300 hover:scale-110 focus:outline-none ring-1 ring-offset-2 ring-offset-black/20
+                                ${currentColor === c.hex ? 'scale-110 ring-white/80 opacity-100' : 'ring-transparent opacity-60 hover:opacity-100'}`}
+                                style={{ backgroundColor: c.hex }}
+                            >
+                                {currentColor === c.hex && (
+                                    <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-[9px] text-white/80 whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {c.name}
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                    </div>
+                </div>
+                </div>
+            );
+        };
+
+        // --- 3D Scene (V9 Logic) ---
+        const Scene = ({ shape, color, handState }) => {
             const mountRef = useRef(null);
             const particlesRef = useRef(null);
             const targetPosRef = useRef(null);
             const handStateRef = useRef(handState);
             const shapeRef = useRef(shape);
+            const colorRef = useRef(color);
 
             useEffect(() => { handStateRef.current = handState; }, [handState]);
             useEffect(() => { shapeRef.current = shape; }, [shape]);
+            
+            // Re-generate geometry when Shape OR Color changes
+            useEffect(() => {
+                if (!particlesRef.current) return;
+                const { positions, colors } = MathUtils.getPositions(shape, PARAMS.particleCount, color);
+                targetPosRef.current = positions;
+                particlesRef.current.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                particlesRef.current.geometry.attributes.color.needsUpdate = true;
+            }, [shape, color]);
 
             useEffect(() => {
                 const width = window.innerWidth; const height = window.innerHeight;
@@ -179,21 +296,8 @@
                 const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), PARAMS.bloomStrength, PARAMS.bloomRadius, PARAMS.bloomThreshold);
                 composer.addPass(bloomPass);
 
-                // GUI
-                const gui = new GUI({ title: 'V9: Classic' });
-                const updateColors = () => {
-                   if (!particlesRef.current) return;
-                   const { colors } = MathUtils.getPositions(shapeRef.current, PARAMS.particleCount);
-                   particlesRef.current.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                   particlesRef.current.geometry.attributes.color.needsUpdate = true;
-                };
-                gui.add(PARAMS, 'autoRotate').name('Auto Rotation');
-                const f2 = gui.addFolder('Colors');
-                f2.addColor(PARAMS, 'heartColor').name('Heart Red').onChange(updateColors);
-                f2.addColor(PARAMS, 'treeRibbon').name('Tree Ribbon').onChange(updateColors);
-
                 const geometry = new THREE.BufferGeometry();
-                const { positions, colors } = MathUtils.getPositions(shape, PARAMS.particleCount);
+                const { positions, colors } = MathUtils.getPositions(shape, PARAMS.particleCount, color);
                 targetPosRef.current = positions;
                 const currentPos = new Float32Array(positions);
                 for(let i=0; i<positions.length; i++) currentPos[i] = (Math.random()-0.5)*100;
@@ -254,8 +358,6 @@
                     if (PARAMS.autoRotate) {
                         const rotSpeed = 0.003 + (openness * 0.02);
                         if (shapeRef.current === 'HEART') {
-                            // CORRECTED AXIS: Rotate around Y axis (Vertical axis)
-                            // This axis connects the bottom tip and the top indentation.
                             particles.rotation.y += rotSpeed;
                             particles.rotation.x *= 0.95; 
                             particles.rotation.z *= 0.95; 
@@ -281,19 +383,11 @@
                     window.removeEventListener('resize', handleResize);
                     cancelAnimationFrame(animationId);
                     mountRef.current.removeChild(renderer.domElement);
-                    gui.destroy(); geometry.dispose(); material.dispose();
+                    geometry.dispose(); material.dispose();
                 };
             }, []);
 
-            useEffect(() => {
-                if (!particlesRef.current) return;
-                const { positions, colors } = MathUtils.getPositions(shape, PARAMS.particleCount);
-                targetPosRef.current = positions;
-                particlesRef.current.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                particlesRef.current.geometry.attributes.color.needsUpdate = true;
-            }, [shape]);
-
-            return <div ref={mountRef} className="absolute inset-0" />;
+            return <div ref={mountRef} className="absolute inset-0 z-0" />;
         };
 
         const CameraController = ({ onUpdate }) => {
@@ -324,24 +418,27 @@
 
         const App = () => {
             const [shape, setShape] = useState('HEART');
+            const [color, setColor] = useState('#ff0033'); // Default color
             const [handState, setHandState] = useState({ detected: false, openness: 0 });
+            
+            // Simulating system ready state
+            const [isReady, setIsReady] = useState(false);
+            useEffect(() => { setTimeout(() => setIsReady(true), 1500); }, []);
+
             return (
-                <div className="w-full h-full font-sans">
-                    <Scene shape={shape} handState={handState} />
+                <div className="w-full h-full font-sans bg-black">
+                    <Scene shape={shape} color={color} handState={handState} />
                     <CameraController onUpdate={setHandState} />
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-4 z-20">
-                        {['HEART', 'SATURN', 'TREE'].map(s => (
-                            <button key={s} onClick={() => setShape(s)}
-                                className={`px-6 py-2 rounded-full text-xs font-bold tracking-[0.25em] transition-all border backdrop-blur-sm
-                                ${shape === s 
-                                    ? 'bg-red-600/20 border-red-500 text-white shadow-[0_0_30px_rgba(255,0,50,0.5)] scale-110' 
-                                    : 'bg-black/40 border-white/10 text-white/40 hover:text-white hover:border-white/40'}`}
-                            >
-                                {s}
-                            </button>
-                        ))}
-                    </div>
-                    {!handState.detected && <div className="glass-loader">WAITING FOR HAND SIGNAL...</div>}
+                    
+                    {/* The New UI Controls */}
+                    <UIControls 
+                        currentShape={shape} 
+                        currentColor={color}
+                        onShapeChange={setShape}
+                        onColorChange={setColor}
+                        isReady={isReady}
+                        isHandDetected={handState.detected}
+                    />
                 </div>
             );
         };
