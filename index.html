@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Particle Alchemist V4 - Edges & Axis</title>
+    <title>Particle Alchemist V5 - Final Polish</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
         {
@@ -24,9 +24,8 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #020202; }
         canvas { display: block; }
-        .lil-gui { --background-color: rgba(10, 10, 10, 0.9); --text-color: #eee; --title-background-color: #ff0055; }
-        .glass-loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.5); font-family: monospace; pointer-events: none; }
-        .axis-label { position: absolute; color: white; font-family: monospace; font-size: 10px; pointer-events: none; }
+        .lil-gui { --background-color: rgba(5, 5, 5, 0.95); --text-color: #eee; --title-background-color: #D32F2F; }
+        .glass-loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.4); font-family: monospace; pointer-events: none; letter-spacing: 2px;}
     </style>
 </head>
 <body>
@@ -42,25 +41,22 @@
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import GUI from 'lil-gui';
 
-        // --- V4 Config ---
+        // --- V5 Config: High Density, Subtle Edges ---
         const PARAMS = {
-            particleCount: 65000, 
-            particleSize: 0.07,   
-            bloomStrength: 1.4,
+            particleCount: 800000, // Massive count for density
+            particleSize: 0.065,  // Slightly smaller for finer detail
+            bloomStrength: 1.3,
             bloomRadius: 0.4,
-            bloomThreshold: 0.1,
-            showAxes: true, // Toggle for Axis Helper
+            bloomThreshold: 0.15,
             autoRotate: true,
             // Colors
-            heartColor: '#ff0033',
-            heartEdge: '#ffffff', // High contrast white edge
-            spiralInner: '#00aaff',
-            spiralOuter: '#ff00aa',
-            treeLeaf: '#00ff55',
-            treeRibbon: '#ffdd00',
-            saturnBody: '#ffaa00',
-            saturnRing: '#4444ff',
-            saturnEdge: '#ffffff' // Ring edge
+            heartColor: '#ff0033', // Deep Red
+            spiralInner: '#00ccff',
+            spiralOuter: '#aa00ff',
+            treeLeaf: '#00ff66',
+            treeRibbon: '#ffcc00', // Gold Ribbon
+            saturnBody: '#ff9900',
+            saturnRing: '#4466ff'
         };
 
         const MathUtils = {
@@ -68,11 +64,9 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = 32; canvas.height = 32;
                 const ctx = canvas.getContext('2d');
-                // Sharper center for better edge definition
                 const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
                 grad.addColorStop(0, 'rgba(255,255,255,1)');
-                grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
-                grad.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+                grad.addColorStop(0.25, 'rgba(255,255,255,0.6)'); 
                 grad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = grad;
                 ctx.fillRect(0, 0, 32, 32);
@@ -83,55 +77,53 @@
                 const positions = new Float32Array(totalCount * 3);
                 const colors = new Float32Array(totalCount * 3);
                 const cMain = new THREE.Color();
-                const cEdge = new THREE.Color();
                 const cSec = new THREE.Color();
 
-                // Allocate particles: 15% for Edges, 85% for Volume
-                const edgeCount = Math.floor(totalCount * 0.15);
+                // Allocate particles: Only 8% for edges now (Subtle), 92% for Volume (Dense)
+                const edgeCount = Math.floor(totalCount * 0.08);
                 const volCount = totalCount - edgeCount;
                 
                 let ptr = 0;
 
                 if (type === 'HEART') {
                     cMain.set(PARAMS.heartColor);
-                    cEdge.set(PARAMS.heartEdge);
-
-                    // 1. Outline (Edges) - High density on the curve
+                    
+                    // 1. Subtle Edge (Using same color, just defining shape)
                     for (let i = 0; i < edgeCount; i++) {
                         const t = (i / edgeCount) * Math.PI * 2;
-                        // Parametric Heart Curve (2D Outline)
                         const x = 16 * Math.pow(Math.sin(t), 3);
                         const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-                        const z = 0; // Flat outline
+                        const z = (Math.random()-0.5) * 1.0; // Minimal thickness for edge
                         
-                        // Scale slightly larger than volume to be visible
                         positions[ptr*3] = x; 
                         positions[ptr*3+1] = y + 2; 
                         positions[ptr*3+2] = z;
                         
-                        // Pure white/bright color for edge
-                        colors[ptr*3] = cEdge.r; colors[ptr*3+1] = cEdge.g; colors[ptr*3+2] = cEdge.b;
+                        // Edge is same color, maybe slightly brighter naturally due to density
+                        colors[ptr*3] = cMain.r; 
+                        colors[ptr*3+1] = cMain.g; 
+                        colors[ptr*3+2] = cMain.b;
                         ptr++;
                     }
 
-                    // 2. Volume (Inside)
+                    // 2. Dense Volume (Solid)
                     let volIdx = 0;
                     while (volIdx < volCount) {
                         const x = (Math.random() * 2 - 1) * 1.5;
                         const y = (Math.random() * 2 - 1) * 1.5;
                         const z = (Math.random() * 2 - 1) * 1.5;
-                        // Heart Inequality
                         const a = x*x + (9/4)*y*y + z*z - 1;
                         if (a*a*a - x*x*z*z*z - (9/80)*y*y*z*z*z < 0) {
                             positions[ptr*3] = x * 10;
                             positions[ptr*3+1] = y * 10 + 2;
                             positions[ptr*3+2] = z * 10;
                             
-                            // Darker red for volume to make edge pop
-                            const depth = (z + 1.5) / 3;
-                            colors[ptr*3] = cMain.r * (0.4 + depth*0.4);
-                            colors[ptr*3+1] = cMain.g * (0.4 + depth*0.4);
-                            colors[ptr*3+2] = cMain.b * (0.4 + depth*0.4);
+                            // Slight gradient for 3D depth, but keeping it rich
+                            const depth = (z + 1.5) / 3; // 0 to 1
+                            const shadow = 0.5 + depth * 0.5; // 0.5 to 1.0
+                            colors[ptr*3] = cMain.r * shadow;
+                            colors[ptr*3+1] = cMain.g * shadow;
+                            colors[ptr*3+2] = cMain.b * shadow;
                             ptr++; volIdx++;
                         }
                     }
@@ -139,12 +131,11 @@
                 else if (type === 'SATURN') {
                     cMain.set(PARAMS.saturnBody);
                     cSec.set(PARAMS.saturnRing);
-                    cEdge.set(PARAMS.saturnEdge);
 
-                    // 1. Edges (Ring Borders)
-                    const rings = [9, 14.5]; // Inner and Outer radius
+                    // 1. Subtle Ring Edges (Inner & Outer)
+                    const rings = [9.2, 14.8]; 
                     for (let i = 0; i < edgeCount; i++) {
-                        const rIndex = i % 2; // Toggle between inner and outer ring
+                        const rIndex = i % 2; 
                         const radius = rings[rIndex];
                         const angle = Math.random() * Math.PI * 2;
                         
@@ -156,14 +147,14 @@
                         positions[ptr*3+1] = x * Math.sin(tilt);
                         positions[ptr*3+2] = z;
 
-                        colors[ptr*3] = cEdge.r; colors[ptr*3+1] = cEdge.g; colors[ptr*3+2] = cEdge.b;
+                        // Ring edge color matches ring color
+                        colors[ptr*3] = cSec.r; colors[ptr*3+1] = cSec.g; colors[ptr*3+2] = cSec.b;
                         ptr++;
                     }
 
-                    // 2. Volume (Body + Ring Surface)
+                    // 2. Volume
                     for (let i = 0; i < volCount; i++) {
-                         if (Math.random() > 0.4) { 
-                             // Body
+                         if (Math.random() > 0.45) { // Body
                              const r = 7 * Math.pow(Math.random(), 1/3);
                              const theta = Math.random() * Math.PI * 2;
                              const phi = Math.acos(2 * Math.random() - 1);
@@ -171,50 +162,81 @@
                              positions[ptr*3+1] = r * Math.sin(phi) * Math.sin(theta);
                              positions[ptr*3+2] = r * Math.cos(phi);
                              colors[ptr*3] = cMain.r; colors[ptr*3+1] = cMain.g; colors[ptr*3+2] = cMain.b;
-                         } else {
-                             // Ring Surface
+                         } else { // Ring Surface
                              const angle = Math.random() * Math.PI * 2;
-                             const dist = 9 + Math.pow(Math.random(), 1.5) * 5.5; 
+                             const dist = 9.2 + Math.pow(Math.random(), 1.5) * 5.6; 
                              const x = Math.cos(angle) * dist;
                              const z = Math.sin(angle) * dist;
                              const tilt = 0.4;
                              positions[ptr*3] = x * Math.cos(tilt);
                              positions[ptr*3+1] = x * Math.sin(tilt);
                              positions[ptr*3+2] = z;
-                             colors[ptr*3] = cSec.r * 0.6; colors[ptr*3+1] = cSec.g * 0.6; colors[ptr*3+2] = cSec.b * 0.6;
+                             colors[ptr*3] = cSec.r * 0.7; colors[ptr*3+1] = cSec.g * 0.7; colors[ptr*3+2] = cSec.b * 0.7;
                          }
                          ptr++;
                     }
                 }
-                else {
-                    // Default fallback for other shapes (keep previous logic logic simpler for brevity)
-                    return MathUtils.getOldPositions(type, totalCount);
+                else if (type === 'TREE') {
+                    // Retaining the Perfect V3/V4 Tree (Spiral Ribbon + Cone)
+                    cMain.set(PARAMS.treeLeaf);
+                    cSec.set(PARAMS.treeRibbon);
+                    const h = 28;
+                    const maxBaseR = 11;
+                    const ribbonCount = Math.floor(totalCount * 0.20); // 20% for ribbon
+                    const bodyCount = totalCount - ribbonCount;
+
+                    // Body
+                    for (let i = 0; i < bodyCount; i++) {
+                        const yPos = (Math.random() * h) - (h/2);
+                        const relY = 1.0 - ((yPos + h/2) / h); 
+                        const maxRAtH = maxBaseR * relY;
+                        const r = Math.pow(Math.random(), 0.8) * maxRAtH; 
+                        const angle = Math.random() * Math.PI * 2;
+
+                        positions[ptr*3] = Math.cos(angle) * r;
+                        positions[ptr*3+1] = yPos;
+                        positions[ptr*3+2] = Math.sin(angle) * r;
+
+                        const shade = 0.4 + Math.random() * 0.6;
+                        colors[ptr*3] = cMain.r * shade; colors[ptr*3+1] = cMain.g * shade; colors[ptr*3+2] = cMain.b * shade;
+                        ptr++;
+                    }
+                    // Spiral Ribbon
+                    for (let i = 0; i < ribbonCount; i++) {
+                        const t = i / ribbonCount;
+                        const yPos = (t * h) - (h/2);
+                        const relY = 1.0 - t;
+                        const r = (maxBaseR * relY) + 0.5;
+                        const angle = t * Math.PI * 2 * 7; // 7 winds
+
+                        positions[ptr*3] = Math.cos(angle) * r;
+                        positions[ptr*3+1] = yPos;
+                        positions[ptr*3+2] = Math.sin(angle) * r;
+                        colors[ptr*3] = cSec.r * 1.2; colors[ptr*3+1] = cSec.g * 1.2; colors[ptr*3+2] = cSec.b * 1.2;
+                        ptr++;
+                    }
+                }
+                else { // SPIRAL (Galaxy)
+                     cMain.set(PARAMS.spiralInner); cSec.set(PARAMS.spiralOuter);
+                     for(let i=0; i<totalCount; i++) {
+                        const radius = Math.pow(Math.random(), 1.5) * 18 + 1; 
+                        const branchAngle = (i % 3) * ((2 * Math.PI) / 3);
+                        const spinAngle = radius * 0.5; 
+                        const angle = branchAngle + spinAngle;
+                        const randomOffset = (Math.random() - 0.5) * (0.3 + radius * 0.05); 
+
+                        positions[ptr*3] = Math.cos(angle) * radius + randomOffset;
+                        positions[ptr*3+1] = (Math.random() - 0.5) * (0.2 + radius * 0.05); // Flat
+                        positions[ptr*3+2] = Math.sin(angle) * radius + randomOffset;
+
+                        const mix = radius / 20;
+                        colors[ptr*3] = cMain.r * (1-mix) + cSec.r * mix;
+                        colors[ptr*3+1] = cMain.g * (1-mix) + cSec.g * mix;
+                        colors[ptr*3+2] = cMain.b * (1-mix) + cSec.b * mix;
+                        ptr++;
+                     }
                 }
                 return { positions, colors };
-            },
-
-            // Helper for Tree/Spiral (kept simple from V3)
-            getOldPositions: (type, count) => {
-                 const positions = new Float32Array(count * 3);
-                 const colors = new Float32Array(count * 3);
-                 const c1 = new THREE.Color(type==='TREE'?PARAMS.treeLeaf:PARAMS.spiralInner);
-                 const c2 = new THREE.Color(type==='TREE'?PARAMS.treeRibbon:PARAMS.spiralOuter);
-                 
-                 for(let i=0; i<count; i++) {
-                    let x=0,y=0,z=0;
-                    if(type==='TREE') {
-                        const h=28; const yPos=(Math.random()*h)-(h/2); const r=Math.random()*10*(1-(yPos+h/2)/h); const a=Math.random()*6.28;
-                        x=Math.cos(a)*r; y=yPos; z=Math.sin(a)*r;
-                        if(Math.random()>0.85) { colors[i*3]=c2.r; colors[i*3+1]=c2.g; colors[i*3+2]=c2.b; x*=1.1; z*=1.1; }
-                        else { colors[i*3]=c1.r; colors[i*3+1]=c1.g; colors[i*3+2]=c1.b; }
-                    } else {
-                        const r=Math.random()*18; const a=r*0.5 + (i%3)*2.1; 
-                        x=Math.cos(a)*r; z=Math.sin(a)*r; y=(Math.random()-0.5);
-                        colors[i*3]=c1.r; colors[i*3+1]=c1.g; colors[i*3+2]=c1.b;
-                    }
-                    positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
-                 }
-                 return {positions, colors};
             }
         };
 
@@ -224,7 +246,6 @@
             const targetPosRef = useRef(null);
             const handStateRef = useRef(handState);
             const shapeRef = useRef(shape);
-            const axesRef = useRef(null); // Ref for Axis Helper
 
             useEffect(() => { handStateRef.current = handState; }, [handState]);
             useEffect(() => { shapeRef.current = shape; }, [shape]);
@@ -233,16 +254,13 @@
                 const width = window.innerWidth; const height = window.innerHeight;
                 const scene = new THREE.Scene();
                 const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 100);
-                camera.position.set(0, 0, 40); // Pull back slightly to see rotation
+                camera.position.set(0, 0, 38);
 
                 const renderer = new THREE.WebGLRenderer({ powerPreference: "high-performance", antialias: false });
                 renderer.setSize(width, height);
                 mountRef.current.appendChild(renderer.domElement);
 
-                // --- AXES HELPER ---
-                const axesHelper = new THREE.AxesHelper(20);
-                scene.add(axesHelper);
-                axesRef.current = axesHelper;
+                // No AxesHelper here (Removed as requested)
 
                 const composer = new EffectComposer(renderer);
                 composer.addPass(new RenderPass(scene, camera));
@@ -250,27 +268,27 @@
                 composer.addPass(bloomPass);
 
                 // GUI
-                const gui = new GUI({ title: 'V4 Controls' });
+                const gui = new GUI({ title: 'V5: Final Polish' });
                 const updateColors = () => {
                    if (!particlesRef.current) return;
                    const { colors } = MathUtils.getPositions(shapeRef.current, PARAMS.particleCount);
                    particlesRef.current.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
                    particlesRef.current.geometry.attributes.color.needsUpdate = true;
                 };
-                
-                gui.add(PARAMS, 'showAxes').name('Show Axes (RGB)').onChange(v => axesHelper.visible = v);
                 gui.add(PARAMS, 'autoRotate').name('Auto Rotation');
-                
-                const f2 = gui.addFolder('Colors & Edges');
-                f2.addColor(PARAMS, 'heartColor').name('Heart Body').onChange(updateColors);
-                f2.addColor(PARAMS, 'heartEdge').name('Heart Outline').onChange(updateColors);
-                f2.addColor(PARAMS, 'saturnEdge').name('Saturn Rings').onChange(updateColors);
+                const f2 = gui.addFolder('Colors');
+                f2.addColor(PARAMS, 'heartColor').name('Heart Red').onChange(updateColors);
+                f2.addColor(PARAMS, 'treeRibbon').name('Tree Gold').onChange(updateColors);
+                f2.addColor(PARAMS, 'saturnRing').name('Saturn Ring').onChange(updateColors);
 
-                // Initial Particle Setup
+                // Init Particles
                 const geometry = new THREE.BufferGeometry();
                 const { positions, colors } = MathUtils.getPositions(shape, PARAMS.particleCount);
                 targetPosRef.current = positions;
                 const currentPos = new Float32Array(positions);
+                // Start exploded
+                for(let i=0; i<positions.length; i++) currentPos[i] = (Math.random()-0.5)*100;
+
                 geometry.setAttribute('position', new THREE.BufferAttribute(currentPos, 3));
                 geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -281,7 +299,7 @@
                     blending: THREE.AdditiveBlending,
                     depthWrite: false,
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 0.85
                 });
 
                 const particles = new THREE.Points(geometry, material);
@@ -291,7 +309,6 @@
                 const controls = new OrbitControls(camera, renderer.domElement);
                 controls.enableDamping = true;
 
-                // Animation
                 const clock = new THREE.Clock();
                 let animationId;
 
@@ -304,41 +321,37 @@
                     const positions = particles.geometry.attributes.position.array;
                     const targets = targetPosRef.current;
 
-                    // Morphing
                     for (let i = 0; i < PARAMS.particleCount; i++) {
                         const i3 = i * 3;
-                        let tx = targets[i3];
-                        let ty = targets[i3+1];
-                        let tz = targets[i3+2];
+                        const breathe = 1 + Math.sin(time * 2 + i*0.01) * 0.01; // Subtle breath
+                        let tx = targets[i3] * breathe;
+                        let ty = targets[i3+1] * breathe;
+                        let tz = targets[i3+2] * breathe;
 
-                        // Explosion Logic
                         if (openness > 0.05) {
-                            const explMult = openness * 15;
-                            tx += (Math.random()-0.5) * explMult;
-                            ty += (Math.random()-0.5) * explMult;
-                            tz += (Math.random()-0.5) * explMult;
+                            const explMult = openness * 18;
+                            tx += (Math.sin(i*0.3 + time) + Math.cos(i*0.1)) * explMult;
+                            ty += (Math.cos(i*0.4 + time) + Math.sin(i*0.2)) * explMult;
+                            tz += Math.sin(i*0.5 + time) * explMult;
                         }
 
-                        // Lerp
-                        const lerpSpeed = 0.05 + (1.0-openness) * 0.05;
+                        const lerpSpeed = 0.06 + (1.0-openness) * 0.08;
                         positions[i3] += (tx - positions[i3]) * lerpSpeed;
                         positions[i3+1] += (ty - positions[i3+1]) * lerpSpeed;
                         positions[i3+2] += (tz - positions[i3+2]) * lerpSpeed;
                     }
                     particles.geometry.attributes.position.needsUpdate = true;
 
-                    // --- V4 ROTATION LOGIC ---
+                    // Rotation Logic: Kept the V4 logic (Y-axis rotation) but without visible axis
                     if (PARAMS.autoRotate) {
-                        const rotSpeed = 0.005 + (openness * 0.02);
-                        
-                        // Heart specifically rotates around Y (Green Axis)
-                        // This makes the "wings" come out of the screen
+                        const rotSpeed = 0.003 + (openness * 0.02);
                         if (shapeRef.current === 'HEART') {
+                            // Rotate around Y axis (The axis connecting the tips)
+                            // This makes it spin out of screen
                             particles.rotation.y += rotSpeed;
-                            particles.rotation.x = THREE.MathUtils.lerp(particles.rotation.x, 0, 0.05); // Stabilize X
-                            particles.rotation.z = THREE.MathUtils.lerp(particles.rotation.z, 0, 0.05); // Stabilize Z
+                            particles.rotation.x *= 0.95; 
+                            particles.rotation.z *= 0.95; 
                         } else {
-                            // Others can rotate normally
                             particles.rotation.y += rotSpeed;
                         }
                     }
@@ -348,7 +361,6 @@
                 };
                 animate();
 
-                // Resize
                 const handleResize = () => {
                     camera.aspect = window.innerWidth / window.innerHeight;
                     camera.updateProjectionMatrix();
@@ -376,7 +388,6 @@
             return <div ref={mountRef} className="absolute inset-0" />;
         };
 
-        // --- Camera Controller ---
         const CameraController = ({ onUpdate }) => {
             const videoRef = useRef(null);
             useEffect(() => {
@@ -411,28 +422,23 @@
                     <Scene shape={shape} handState={handState} />
                     <CameraController onUpdate={setHandState} />
                     
-                    {/* UI V4 */}
-                    <div className="absolute top-4 left-4 text-white/50 text-xs font-mono pointer-events-none">
-                        <p>AXIS GUIDE:</p>
-                        <p className="text-red-500">RED = X (Horizontal)</p>
-                        <p className="text-green-500">GREEN = Y (Tips Axis)</p>
-                        <p className="text-blue-500">BLUE = Z (Depth)</p>
-                    </div>
-
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+                    {/* Minimalist Controls */}
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-4 z-20">
                         {['HEART', 'SATURN', 'SPIRAL', 'TREE'].map(s => (
                             <button key={s} onClick={() => setShape(s)}
-                                className={`px-5 py-2 rounded-sm text-xs font-black tracking-[0.2em] transition-all border
-                                ${shape === s ? 'bg-pink-600 border-pink-500 text-white scale-110 shadow-[0_0_25px_rgba(255,0,100,0.6)]' : 'bg-black/50 border-white/10 text-white/50 hover:text-white hover:border-white/50'}`}
+                                className={`px-6 py-2 rounded-full text-xs font-bold tracking-[0.25em] transition-all border backdrop-blur-sm
+                                ${shape === s 
+                                    ? 'bg-red-600/20 border-red-500 text-white shadow-[0_0_30px_rgba(255,0,50,0.5)] scale-110' 
+                                    : 'bg-black/40 border-white/10 text-white/40 hover:text-white hover:border-white/40'}`}
                             >
                                 {s}
                             </button>
                         ))}
                     </div>
+                    {!handState.detected && <div className="glass-loader">WAITING FOR HAND SIGNAL...</div>}
                 </div>
             );
         };
-
         createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
